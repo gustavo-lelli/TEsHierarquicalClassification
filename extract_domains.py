@@ -97,7 +97,7 @@ for species_name in species_list:
 
 		# Verificar se a sequência já foi processada
 		if status_seq.get(sequence_file, 0) == 1 or status_seq.get(sequence_file, 0) == -1:
-			print(f"Sequência {sequence_file} já foi ou está sendo processada. Pulando...")
+			print(f"Sequência {species_name}/{sequence_file} já foi ou está sendo processada. Pulando...")
 			continue
 
 		# Atualizar o status da sequência para "processando"
@@ -125,13 +125,16 @@ for species_name in species_list:
 
 			# Timer para o cromossomo
 			sequence_end_time = time.time()
-			print(f"Cromossomo {species_name}/{sequence_file.replace('.fasta', '')} processado em {sequence_end_time - sequence_start_time:.2f} segundos.")
+			print(f"Sequência {species_name}/{sequence_file.replace('.fasta', '')} processado em {sequence_end_time - sequence_start_time:.2f} segundos.")
+
+			# Atualizar o status da sequência para "processada"
+			update_status(status_seq_file, sequence_file, 1)
 		except subprocess.CalledProcessError as e:
 			print("Erro ao executar o comando:")
 			print(e.stderr)
 
-		# Atualizar o status da sequência para "processada"
-		update_status(status_file, sequence_file, 1)
+			# Atualizar o status da sequência para "erro"
+			update_status(status_seq_file, sequence_file, 0)
 
 	# Atualizar o status da espécie para "processada"
 	update_status(status_file, species_name, 1)
