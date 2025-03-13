@@ -1,17 +1,34 @@
 import subprocess
 import os
 import time
+import gc
+from multiprocessing import Pool, cpu_count
+import logging
+import re
 
-# Função para ler o status das espécies e adicionar novas espécies com status 0
+Status = {
+	"PROCESSING": -1,
+	"WATING/ERROR": 0,
+	"SUCCESS": 1
+}
+
+# Configuração de logs
+logging.basicConfig(
+	filename='extract_domains.log',
+	level=logging.INFO,
+	format='%(asctime)s - %(levelname)s - %(message)s'
+)
+
+# Função para ler o status das espécies e adicionar novas espécies com status WAITING/ERROR
 def read_status(status_file, species_list):
 	status = {}
 
-	# Se o arquivo de status não existir, cria um novo com todas as espécies como não processadas (0)
+	# Se o arquivo de status não existir, cria um novo com todas as espécies como não processadas (WAITING/ERROR)
 	if not os.path.exists(status_file):
 		with open(status_file, "w") as f:
 			for species in species_list:
-				f.write(f"{species}:0\n")
-				status[species] = 0
+				f.write(f"{species}:{Status["WAITING/ERROR"]}\n")
+				status[species] = Status["WAITING/ERROR"]
 	else:
 		# Se o arquivo existir, lê o status atual
 		with open(status_file, "r") as f:
@@ -22,14 +39,13 @@ def read_status(status_file, species_list):
 				status[species] = int(state)
 				existing_species.add(species)
 
-		# Verifica se há novas espécies que não estão no arquivo de status
-		new_species = set(species_list) - existing_species
-		if new_species:
-			with open(status_file, "a") as f:
-				for species in new_species:
-					f.write(f"{species}:0\n")
-					status[species] = 0
+			new_species = set(species_list) - existing_species
 
+			if new_species:
+				with open(status_file, "a") as f:
+					for species in new_species:
+						f.write(f"{species}:{Status["WAITING/ERROR"]}\n")
+						status[species] = Status["WAITING/ERROR"]
 	return status
 
 # Função para atualizar o status de uma espécie
@@ -42,99 +58,83 @@ def update_status(status_file, species, state):
 				status[s] = int(st)
 
 	status[species] = state
-
+	
 	with open(status_file, "w") as f:
 		for s, st in status.items():
 			f.write(f"{s}:{st}\n")
 
-# Lista de todas as espécies na pasta "data"
-species_list = sorted(os.listdir("data"))
+# Função para processar uma sequência
+def process_sequence(sequence_file, sequences_folder, output_folder, interproscan_path, applications, output_format):
+	# Timer para a sequência
+	sequence_start_time = time.time()
 
-data_folder = "data"
-# Caminho para o script do InterProScan
-interproscan_path = "./InterProScan/interproscan-5.73-104.0/interproscan.sh"
+	sequence_path = os.path.join(sequences_folder, sequence_file)
+	output_path = os.path.join(output_folder, sequence_file.replace('.fasta', ''))
 
-for species_name in species_list:
-	if species_name == "extracted_domains.txt":
-		print("Extração de Domínios Finalizado!")
-		continue
+	command = [
+		interproscan_path,
+		"-i", sequence_path,
+		"-appl", ','.join(applications),
+		"-b", output_path,
+		"-f", output_format
+	]
 
-	# Caminho do arquivo de controle
-	status_file = os.path.join(data_folder, "extracted_domains.txt")
+	patterns_to_remove = [r'data/', r'domains/', r'\.fasta']
+	regex_pattern = '|'.join(patterns_to_remove)
+	output_species_log = re.sub(regex_pattern, '', output_path)
 
-	# Ler o status atual e adicionar novas espécies, se necessário
-	status = read_status(status_file, species_list)
+	try:
+		result = subprocess.run(command, check=True, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=3600)
 
-	# Verificar se a espécie já foi processada
-	if status.get(species_name, 0) == 1 or status.get(species_name, 0) == -1:
-		print(f"Espécie {species_name} já foi ou está sendo processada. Pulando...")
-		continue
+		# Timer para o cromossomo
+		sequence_end_time = time.time()
+		logging.info(f"Sequência {output_species_log} processada em {sequence_end_time - sequence_start_time:.2f} segundos.")
+		return sequence_file, Status["SUCCESS"]
+	except subprocess.CalledProcessError as e:
+		logging.error(f"Erro ao processar {output_species_log}: {e.stderr}")
+		return sequence_file, Status["WAITING/ERROR"]
+	finally:
+		gc.collect()  # Liberar memória
 
-	# Atualizar o status da espécie para "processando"
-	update_status(status_file, species_name, -1)
+# Código principal
+if __name__ == "__main__":
+	species_list = sorted(os.listdir("data"))
+	data_folder = "data"
+	interproscan_path = "./InterProScan/interproscan-5.73-104.0/interproscan.sh"
+	applications = ["PROSITEPATTERNS", "PROSITEPROFILES", "CDD", "PRINTS", "Pfam"]
+	output_format = "tsv"
 
-	# Timer para a espécie
-	species_start_time = time.time()
-
-	species_folder = os.path.join(data_folder, species_name)
-	os.makedirs(species_folder, exist_ok=True)
-
-	sequences_folder = os.path.join(species_folder, "seq")
-	output_folder = os.path.join(species_folder, "domains")
-	os.makedirs(output_folder, exist_ok=True)
-
-	# Lista de todas as espécies na pasta "data"
-	sequences_list = sorted(os.listdir(sequences_folder))
-	
-	# Processar as sequências
-	for sequence_file in sequences_list:
-		# Caminho do arquivo de controle
-		status_seq_file = os.path.join(species_folder, "extracted_domains.txt")
-		os.makedirs(species_folder, exist_ok=True)
-
-		# Ler o status atual e adicionar novas espécies, se necessário
-		status_seq = read_status(status_seq_file, sequences_list)
-
-		# Verificar se a sequência já foi processada
-		if status_seq.get(sequence_file, 0) == 1 or status_seq.get(sequence_file, 0) == -1:
-			print(f"Sequência {species_name}/{sequence_file} já foi ou está sendo processada. Pulando...")
+	for species_name in species_list:
+		if species_name == "extracted_domains.txt":
+			logging.info("Extração de Domínios Finalizado!")
 			continue
 
-		# Atualizar o status da sequência para "processando"
-		update_status(status_seq_file, sequence_file, -1)
+		status_file = os.path.join(data_folder, "extracted_domains.txt")
+		status = read_status(status_file, species_list)
 
-		# Timer para a sequência
-		sequence_start_time = time.time()
+		if status.get(species_name, 0) == Status["SUCCESS"] or status.get(species_name, 0) == Status["PROCESSING"]:
+			logging.info(f"Espécie {species_name} já foi ou está sendo processada. Pulando...")
+			continue
 
-		sequence_path = os.path.join(sequences_folder, sequence_file)
+		update_status(status_file, species_name, Status["PROCESSING"])
+		species_folder = os.path.join(data_folder, species_name)
+		os.makedirs(species_folder, exist_ok=True)
 
-		# Caminho para o diretório de saída
-		output_path = os.path.join(output_folder, sequence_file.replace('.fasta', ''))
+		sequences_folder = os.path.join(species_folder, "seq")
+		output_folder = os.path.join(species_folder, "domains")
+		os.makedirs(output_folder, exist_ok=True)
 
-		# Formato de saída
-		output_format = "tsv"
+		sequences_list = sorted(os.listdir(sequences_folder))
+		num_processes = max(1, cpu_count() // 2)  # Usar metade dos núcleos da CPU
 
-		# Construindo o comando
-		command = [interproscan_path, "-i", sequence_path, "-b", output_path, "-f", output_format]
+		with Pool(num_processes) as pool:
+			results = pool.starmap(process_sequence, [
+				(seq, sequences_folder, output_folder, interproscan_path, applications, output_format)
+				for seq in sequences_list
+			])
 
-		# Executando o comando
-		try:
-			result = subprocess.run(command, check=True, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=3600)
-			print("Saída do comando:")
-			print(result.stdout)
+		# Atualizar status das sequências
+		for sequence_file, status_code in results:
+			update_status(os.path.join(species_folder, "extracted_domains.txt"), sequence_file, status_code)
 
-			# Timer para o cromossomo
-			sequence_end_time = time.time()
-			print(f"Sequência {species_name}/{sequence_file.replace('.fasta', '')} processado em {sequence_end_time - sequence_start_time:.2f} segundos.")
-
-			# Atualizar o status da sequência para "processada"
-			update_status(status_seq_file, sequence_file, 1)
-		except subprocess.CalledProcessError as e:
-			print("Erro ao executar o comando:")
-			print(e.stderr)
-
-			# Atualizar o status da sequência para "erro"
-			update_status(status_seq_file, sequence_file, 0)
-
-	# Atualizar o status da espécie para "processada"
-	update_status(status_file, species_name, 1)
+		update_status(status_file, species_name, Status["SUCCESS"])
