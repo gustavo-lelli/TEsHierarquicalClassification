@@ -89,12 +89,16 @@ def process_sequence(sequence_file, sequences_folder, output_folder, interprosca
 		# Timer para o cromossomo
 		sequence_end_time = time.time()
 		logging.info(f"Sequência {output_species_log} processada em {sequence_end_time - sequence_start_time:.2f} segundos.")
-		return sequence_file, Status["SUCCESS"]
 	except subprocess.CalledProcessError as e:
 		logging.error(f"Erro ao processar {output_species_log}: {e.stderr}")
-		return sequence_file, Status["WAITING/ERROR"]
 	finally:
 		gc.collect()  # Liberar memória
+
+# Função para verificar se uma sequência já foi processada (arquivo .tsv existe)
+def is_sequence_processed(sequence_file, domains_folder):
+	sequence_name = sequence_file.replace('.fasta', '')
+	tsv_file = os.path.join(domains_folder, f"{sequence_name}.tsv")
+	return os.path.exists(tsv_file)
 
 # Código principal
 if __name__ == "__main__":
@@ -105,9 +109,8 @@ if __name__ == "__main__":
 	output_format = "tsv"
 
 	for species_name in species_list:
-		if species_name == "extracted_domains.txt":
-			logging.info("Extração de Domínios Finalizado!")
-			continue
+		species_folder = os.path.join(data_folder, species_name)
+		os.makedirs(species_folder, exist_ok=True)
 
 		status_file = os.path.join(data_folder, "extracted_domains.txt")
 		status = read_status(status_file, species_list)
@@ -127,14 +130,22 @@ if __name__ == "__main__":
 		sequences_list = sorted(os.listdir(sequences_folder))
 		num_processes = max(1, cpu_count() // 2)  # Usar metade dos núcleos da CPU
 
+		# Lista para armazenar sequências que precisam ser processadas
+		sequences_to_process = []
+
+		# Verifica quais sequências já foram processadas
+		for sequence_file in sequences_list:
+			if is_sequence_processed(sequence_file, output_folder):
+				logging.info(f"Sequência {sequence_file} já foi processada. Pulando...")
+			else:
+				sequences_to_process.append(sequence_file)
+
+		# Processa apenas as sequências que ainda não foram processadas
 		with Pool(num_processes) as pool:
 			results = pool.starmap(process_sequence, [
 				(seq, sequences_folder, output_folder, interproscan_path, applications, output_format)
-				for seq in sequences_list
+				for seq in sequences_to_process
 			])
 
-		# Atualizar status das sequências
-		for sequence_file, status_code in results:
-			update_status(os.path.join(species_folder, "extracted_domains.txt"), sequence_file, status_code)
-
 		update_status(status_file, species_name, Status["SUCCESS"])
+		logging.info(f"Extração de Domínios da {species_name} Finalizado!")
