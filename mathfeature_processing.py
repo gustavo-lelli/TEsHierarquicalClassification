@@ -136,10 +136,23 @@ def run_preprocessing(plant, seq_name):
 	os.makedirs(output_dir, exist_ok=True)
 	
 	output_file = os.path.join(output_dir, seq_name)
-	command = f"python3 {PREPROCESSING_SCRIPT} -i {seq_path} -o {output_file}"
+	cmd = f"python3 {PREPROCESSING_SCRIPT} -i {seq_path} -o {output_file}"
 	
 	try:
-		subprocess.run(command, shell=True, check=True)
+		result = subprocess.run(
+			cmd,
+			shell=True,
+			check=True,
+			timeout=600,
+			stdout=subprocess.PIPE,
+			stderr=subprocess.PIPE,
+			text=True
+		)
+
+		if not os.path.exists(output_file) or os.path.getsize(output_file) == 0:
+			logging.error(f"FALHA PRÉ-PROCESSAMENTO: {plant}/{seq_name} | Erro: Arquivo de saída não foi criado ou vazio")
+			return False
+			
 		logging.info(f"SUCESSO PRÉ-PROCESSAMENTO: {plant}/{seq_name}")
 		return True
 	except subprocess.CalledProcessError as e:
@@ -155,6 +168,10 @@ def run_numerical_mapping(plant, seq_name, representation_num):
 		return True
 		
 	seq_path = os.path.join(DATA_DIR, plant, "preprocessing", seq_name)
+	if os.path.getsize(seq_path) == 0:
+		logging.error(f"FALHA MAPEAMENTO: {plant}/{seq_name} | Erro: Arquivo de sequência vazio")
+		return False
+
 	output_dir = os.path.join(DATA_DIR, plant, "mappings", NUMERICAL_REPRESENTATIONS[representation_num])
 	os.makedirs(output_dir, exist_ok=True)
 
@@ -207,6 +224,10 @@ def run_chaos_mapping(plant, seq_name, approach_num):
 		return True
 		
 	seq_path = os.path.join(DATA_DIR, plant, "preprocessing", seq_name)
+	if os.path.getsize(seq_path) == 0:
+		logging.error(f"FALHA CHAOS: {plant}/{seq_name} | Erro: Arquivo de sequência vazio")
+		return False
+	
 	output_dir = os.path.join(DATA_DIR, plant, "chaos", CHAOS_APPROACHES[approach_num])
 	os.makedirs(output_dir, exist_ok=True)
 	
@@ -258,6 +279,10 @@ def run_fourier_analysis(plant, seq_name, representation_num):
 		return True
 		
 	seq_path = os.path.join(DATA_DIR, plant, "preprocessing", seq_name)
+	if os.path.getsize(seq_path) == 0:
+		logging.error(f"FALHA FOURIER: {plant}/{seq_name} | Erro: Arquivo de sequência vazio")
+		return False
+	
 	output_dir = os.path.join(DATA_DIR, plant, "fourier", NUMERICAL_REPRESENTATIONS[representation_num])
 	os.makedirs(output_dir, exist_ok=True)
 	
@@ -301,6 +326,10 @@ def run_entropy_analysis(plant, seq_name, entropy_type):
 		return True
 		
 	seq_path = os.path.join(DATA_DIR, plant, "preprocessing", seq_name)
+	if os.path.getsize(seq_path) == 0:
+		logging.error(f"FALHA ENTROPIA: {plant}/{seq_name} | Erro: Arquivo de sequência vazio")
+		return False
+	
 	output_dir = os.path.join(DATA_DIR, plant, "entropy", ENTROPY_TYPES[entropy_type])
 	os.makedirs(output_dir, exist_ok=True)
 	
@@ -357,6 +386,10 @@ def run_complex_networks(plant, seq_name):
 		return True
 		
 	seq_path = os.path.join(DATA_DIR, plant, "preprocessing", seq_name)
+	if os.path.getsize(seq_path) == 0:
+		logging.error(f"FALHA REDES COMPLEXAS: {plant}/{seq_name} | Erro: Arquivo de sequência vazio")
+		return False
+	
 	output_dir = os.path.join(DATA_DIR, plant, "complex_networks")
 	os.makedirs(output_dir, exist_ok=True)
 	
@@ -400,6 +433,10 @@ def run_k_mer(plant, seq_name):
 		return True
 		
 	seq_path = os.path.join(DATA_DIR, plant, "preprocessing", seq_name)
+	if os.path.getsize(seq_path) == 0:
+		logging.error(f"FALHA K-MER: {plant}/{seq_name} | Erro: Arquivo de sequência vazio")
+		return False
+	
 	output_dir = os.path.join(DATA_DIR, plant, "k-mer")
 	os.makedirs(output_dir, exist_ok=True)
 
@@ -450,6 +487,10 @@ def run_accumulated_nucleotide_frequency(plant, seq_name, representation_num):
 		return True
 		
 	seq_path = os.path.join(DATA_DIR, plant, "preprocessing", seq_name)
+	if os.path.getsize(seq_path) == 0:
+		logging.error(f"FALHA ANF: {plant}/{seq_name} | Erro: Arquivo de sequência vazio")
+		return False
+	
 	output_dir = os.path.join(DATA_DIR, plant, "anf", ANF_TYPES[representation_num])
 	os.makedirs(output_dir, exist_ok=True)
 
@@ -501,6 +542,10 @@ def run_orf(plant, seq_name):
 		return True
 		
 	seq_path = os.path.join(DATA_DIR, plant, "preprocessing", seq_name)
+	if os.path.getsize(seq_path) == 0:
+		logging.error(f"FALHA ORF: {plant}/{seq_name} | Erro: Arquivo de sequência vazio")
+		return False
+	
 	output_dir = os.path.join(DATA_DIR, plant, "orf")
 	os.makedirs(output_dir, exist_ok=True)
 	
@@ -543,6 +588,10 @@ def run_fickett_score(plant, seq_name):
 		return True
 		
 	seq_path = os.path.join(DATA_DIR, plant, "preprocessing", seq_name)
+	if os.path.getsize(seq_path) == 0:
+		logging.error(f"FALHA FICKETT SCORE: {plant}/{seq_name} | Erro: Arquivo de sequência vazio")
+		return False
+	
 	output_dir = os.path.join(DATA_DIR, plant, "fickett_score")
 	os.makedirs(output_dir, exist_ok=True)
 	
