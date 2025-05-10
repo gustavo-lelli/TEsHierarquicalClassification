@@ -84,7 +84,7 @@ def process_sequence(sequence_file, sequences_folder, output_folder, interprosca
 	output_species_log = re.sub(regex_pattern, '', output_path)
 
 	try:
-		result = subprocess.run(command, check=True, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=3600)
+		subprocess.run(command, check=True, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=3600)
 
 		# Timer para o cromossomo
 		sequence_end_time = time.time()

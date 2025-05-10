@@ -139,7 +139,7 @@ def run_preprocessing(plant, seq_name):
 	cmd = f"python3 {PREPROCESSING_SCRIPT} -i {seq_path} -o {output_file}"
 	
 	try:
-		result = subprocess.run(
+		subprocess.run(
 			cmd,
 			shell=True,
 			check=True,
